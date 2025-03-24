@@ -7,7 +7,7 @@ class InventoryItem(models.Model):
         ('it', 'IT Supplies'),
         ('consumable', 'Consumables'),
         ('maint', 'Maintenance'),
-        ('clean', 'Clean Supplies'),
+        ('clean', 'Cleaning Supplies'),
         ('furniture', 'Furniture'),
         ('misc', 'Miscellaneous'),
     ]
@@ -29,6 +29,7 @@ class InventoryItem(models.Model):
     description = models.TextField(blank=True)
     category = models.CharField(max_length=50, choices=CATEGORY_CHOICES)
     quantity = models.PositiveIntegerField()
+    reorder_threshold = models.PositiveIntegerField(default=0)
     supplier_info = models.TextField(blank=True)
     price = models.DecimalField(max_digits=10, decimal_places=2)
     location = models.CharField(max_length=100, choices=LOCATION_CHOICES)

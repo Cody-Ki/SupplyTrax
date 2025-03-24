@@ -1,0 +1,37 @@
+<!-- templates/inventory/inventory_list.html -->
+{% extends 'base.html' %}
+{% block content %}
+<h2>Inventory Items</h2>
+<a href="{% url 'inventory-add' %}" class="btn btn-primary">Add New Item</a>
+<table class="table mt-3">
+    <thead>
+        <tr>
+            <th>Name</th>
+            <th>Category</th>
+            <th>Quantity</th>
+            <th>Reorder Threshold</th>
+            <th>Price</th>
+            <th>Location</th>
+            <th>Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for item in items %}
+        <tr>
+            <td>{{ item.name }}</td>
+            <td>{{ item.get_category_display }}</td>
+            <td>{{ item.quantity }}</td>
+            <td>{{ item.reorder_threshold }}</td>
+            <td>${{ item.price }}</td>
+            <td>{{ item.get_location_display }}</td>
+            <td>
+                <a href="{% url 'inventory-edit' item.pk %}" class="btn btn-sm btn-warning">Edit</a>
+                <a href="{% url 'inventory-delete' item.pk %}" class="btn btn-sm btn-danger">Delete</a>
+            </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="7">No items found.</td></tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endblock %}

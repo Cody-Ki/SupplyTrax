@@ -1,37 +1,111 @@
-<!-- templates/inventory/inventory_list.html -->
 {% extends 'base.html' %}
+{% load crispy_forms_tags %}
+
 {% block content %}
 <h2>Inventory Items</h2>
-<a href="{% url 'inventory-add' %}" class="btn btn-primary">Add New Item</a>
-<table class="table mt-3">
-    <thead>
-        <tr>
-            <th>Name</th>
-            <th>Category</th>
-            <th>Quantity</th>
-            <th>Reorder Threshold</th>
-            <th>Price</th>
-            <th>Location</th>
-            <th>Actions</th>
-        </tr>
+
+<form method="get" class="row gy-2 gx-3 align-items-center mb-3">
+  <div class="col-auto">
+    <input type="text" name="search" value="{{ search }}" class="form-control" placeholder="Search…">
+  </div>
+  <div class="col-auto">
+    <select name="category" class="form-select">
+      <option value="">All Categories</option>
+      {% for code,label in categories %}
+        <option value="{{ code }}" {% if code == selected_category %}selected{% endif %}>{{ label }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="col-auto">
+    <select name="location" class="form-select">
+      <option value="">All Locations</option>
+      {% for code,label in locations %}
+        <option value="{{ code }}" {% if code == selected_location %}selected{% endif %}>{{ label }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="col-auto">
+    <select name="sort" class="form-select">
+      <option value="">Sort By</option>
+      <option value="quantity_asc" {% if selected_sort == 'quantity_asc' %}selected{% endif %}>Quantity ↑</option>
+      <option value="quantity_desc" {% if selected_sort == 'quantity_desc' %}selected{% endif %}>Quantity ↓</option>
+      <option value="price_asc" {% if selected_sort == 'price_asc' %}selected{% endif %}>Price ↑</option>
+      <option value="price_desc" {% if selected_sort == 'price_desc' %}selected{% endif %}>Price ↓</option>
+    </select>
+  </div>
+  <div class="col-auto">
+    <button type="submit" class="btn btn-secondary">Filter</button>
+  </div>
+  <div class="col-auto">
+    <a href="{% url 'inventory-list' %}" class="btn btn-link">Reset</a>
+  </div>
+  <div class="col-auto ms-auto">
+    <a href="{% url 'inventory-add' %}" class="btn btn-primary">+ Add New Item</a>
+  </div>
+</form>
+
+<div class="table-responsive">
+  <table class="table table-hover align-middle">
+    <thead class="table-light">
+      <tr>
+        <th>Name</th>
+        <th>Category</th>
+        <th>Qty</th>
+        <th>Reorder</th>
+        <th>Price</th>
+        <th>Location</th>
+        <th>Actions</th>
+      </tr>
     </thead>
     <tbody>
-        {% for item in items %}
-        <tr>
-            <td>{{ item.name }}</td>
-            <td>{{ item.get_category_display }}</td>
-            <td>{{ item.quantity }}</td>
-            <td>{{ item.reorder_threshold }}</td>
-            <td>${{ item.price }}</td>
-            <td>{{ item.get_location_display }}</td>
-            <td>
-                <a href="{% url 'inventory-edit' item.pk %}" class="btn btn-sm btn-warning">Edit</a>
-                <a href="{% url 'inventory-delete' item.pk %}" class="btn btn-sm btn-danger">Delete</a>
-            </td>
-        </tr>
-        {% empty %}
-        <tr><td colspan="7">No items found.</td></tr>
-        {% endfor %}
+      {% for item in items %}
+      <tr {% if item.quantity <= item.reorder_threshold %}class="table-warning" data-bs-toggle="tooltip" title="Low stock"{% endif %}>
+        <td><a href="{% url 'inventory-detail' item.pk %}">{{ item.name }}</a></td>
+        <td><span class="badge bg-secondary">{{ item.get_category_display }}</span></td>
+        <td>{{ item.quantity }}</td>
+        <td>{{ item.reorder_threshold }}</td>
+        <td>${{ item.price }}</td>
+        <td><span class="badge bg-info text-dark">{{ item.get_location_display }}</span></td>
+        <td>
+          <a href="{% url 'inventory-edit' item.pk %}" class="btn btn-sm btn-outline-primary" data-bs-toggle="tooltip" title="Edit">
+            <i class="bi bi-pencil-fill"></i>
+          </a>
+          <a href="{% url 'inventory-delete' item.pk %}" class="btn btn-sm btn-outline-danger" data-bs-toggle="tooltip" title="Delete">
+            <i class="bi bi-trash-fill"></i>
+          </a>
+        </td>
+      </tr>
+      {% empty %}
+        <tr><td colspan="7" class="text-center py-4">No items found.</td></tr>
+      {% endfor %}
     </tbody>
-</table>
+  </table>
+</div>
+
+{% if is_paginated %}
+  <nav>
+    <ul class="pagination">
+      {% if page_obj.has_previous %}
+        <li class="page-item">
+          <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if params %}&{{ params }}{% endif %}">
+            Previous
+          </a>
+        </li>
+      {% endif %}
+
+      <li class="page-item active">
+        <span class="page-link">{{ page_obj.number }}</span>
+      </li>
+
+      {% if page_obj.has_next %}
+        <li class="page-item">
+          <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if params %}&{{ params }}{% endif %}">
+            Next
+          </a>
+        </li>
+      {% endif %}
+    </ul>
+  </nav>
+{% endif %}
+
 {% endblock %}

@@ -2,11 +2,15 @@
 {% load crispy_forms_tags %}
 
 {% block content %}
-<h2>{{ view.object.pk|default:"Add New" }} Item</h2>
+<h2>{% if view.object.pk %}Edit{% else %}Add New{% endif %} Item</h2>
+
 <form method="post">
     {% csrf_token %}
     {{ form|crispy }}
-    <button type="submit" class="btn btn-success">Save</button>
-    <a href="{% url 'inventory-list' %}" class="btn btn-secondary">Cancel</a>
+    <div class="mt-4 d-flex justify-content-end">
+        <a href="{% url 'inventory-list' %}" class="btn btn-secondary me-2">Cancel</a>
+        <button type="submit" class="btn btn-success">Save</button>
+    </div>
 </form>
+
 {% endblock %}

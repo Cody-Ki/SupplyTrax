@@ -1,0 +1,88 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="row g-4">
+  <!-- Summary Cards -->
+  <div class="col-md-3">
+    <div class="card text-white bg-primary h-100">
+      <div class="card-body">
+        <h5 class="card-title">Total Items</h5>
+        <p class="display-6">{{ total_items }}</p>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="card text-white bg-warning h-100">
+      <div class="card-body">
+        <h5 class="card-title">Low Stock</h5>
+        <p class="display-6">{{ low_stock_items }}</p>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="card text-white bg-success h-100">
+      <div class="card-body">
+        <h5 class="card-title">Categories</h5>
+        <p class="display-6">{{ category_labels|length }}</p>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="card text-white bg-info h-100">
+      <div class="card-body">
+        <h5 class="card-title">Locations</h5>
+        <p class="display-6">{{ location_labels|length }}</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="row mt-5">
+  <div class="col-md-6">
+    <div class="card">
+      <div class="card-header">Items by Category</div>
+      <div class="card-body">
+        <canvas id="categoryChart"></canvas>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-6">
+    <div class="card">
+      <div class="card-header">Items by Location</div>
+      <div class="card-body">
+        <canvas id="locationChart"></canvas>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+  // Data arrays from view context
+  const catLabels = {{ category_labels|safe }};
+  const catData   = {{ category_data|safe }};
+  const locLabels = {{ location_labels|safe }};
+  const locData   = {{ location_data|safe }};
+
+  new Chart(document.getElementById('categoryChart'), {
+    type: 'bar',
+    data: {
+      labels: catLabels,
+      datasets: [{
+        label: 'Items',
+        data: catData
+      }]
+    },
+    options: { responsive: true }
+  });
+
+  new Chart(document.getElementById('locationChart'), {
+    type: 'pie',
+    data: {
+      labels: locLabels,
+      datasets: [{ data: locData }]
+    },
+    options: { responsive: true }
+  });
+</script>
+{% endblock %}

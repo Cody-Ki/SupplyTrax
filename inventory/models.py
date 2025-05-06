@@ -33,6 +33,8 @@ class InventoryItem(models.Model):
     supplier_info = models.TextField(blank=True)
     price = models.DecimalField(max_digits=10, decimal_places=2)
     location = models.CharField(max_length=100, choices=LOCATION_CHOICES)
+    asset_managed = models.BooleanField(default=False, help_text='Mark as an asset so it can be assigned to User/Department.')
+    serial_number = models.CharField(max_length=100, blank=True, null=True, unique=True, help_text='Serial Number or Asset Tag #')
     barcode = models.CharField(max_length=10, blank=True, null=True, unique=True)
     date_added = models.DateTimeField(auto_now_add=True)
     date_modified = models.DateTimeField(auto_now=True)

@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card mt-4">
+  <div class="card-header">
+    <h3>Adjust Stock: {{ item.name }}</h3>
+  </div>
+  <div class="card-body">
+    <form method="post">
+      {% csrf_token %}
+      {{ form.non_field_errors }}
+      <div class="mb-3">
+        {{ form.delta.label_tag }}
+        {{ form.delta }}
+        <div class="form-text">{{ form.delta.help_text }}</div>
+        {{ form.delta.errors }}
+      </div>
+      <div class="mb-3">
+        {{ form.notes.label_tag }}
+        {{ form.notes }}
+        <div class="form-text">{{ form.notes.help_text }}</div>
+        {{ form.notes.errors }}
+      </div>
+      <button type="submit" class="btn btn-primary">Apply</button>
+      <a href="{% url 'inventory-detail' item.pk %}" class="btn btn-secondary">Cancel</a>
+    </form>
+  </div>
+</div>
+{% endblock %}

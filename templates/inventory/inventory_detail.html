@@ -1,69 +1,85 @@
 {% extends 'base.html' %}
+
 {% block content %}
 <div class="card mt-4">
   <div class="card-header d-flex justify-content-between align-items-center">
     <h3 class="mb-0">Item Details</h3>
-    <a href="{% url 'inventory-list' %}" class="btn btn-outline-secondary" aria-label="Back to Inventory List">
-      <i class="bi bi-arrow-left-circle" aria-hidden="true"></i>
-      <span class="visually-hidden">Back to Inventory List</span>
+    <a href="{% url 'inventory-list' %}" class="btn btn-outline-secondary">
+      <i class="bi bi-arrow-left-circle"></i> Back to List
     </a>
   </div>
   <div class="card-body">
     <div class="row g-3">
-      <div class="col-md-6">
-        <strong>Name:</strong> {{ object.name }}
-      </div>
-      <div class="col-md-6">
-        <strong>Category:</strong> {{ object.get_category_display }}
-      </div>
-      <div class="col-md-6">
-        <strong>Quantity:</strong> {{ object.quantity }}
-      </div>
-      <div class="col-md-6">
-        <strong>Reorder Threshold:</strong> {{ object.reorder_threshold }}
-      </div>
-      <div class="col-md-6">
-        <strong>Price:</strong> ${{ object.price }}
-      </div>
-      <div class="col-md-6">
-        <strong>Location:</strong> {{ object.get_location_display }}
-      </div>
+      <div class="col-md-6"><strong>Name:</strong> {{ item.name }}</div>
+      <div class="col-md-6"><strong>Category:</strong> {{ item.get_category_display }}</div>
+      <div class="col-md-6"><strong>Quantity:</strong> {{ item.quantity }}</div>
+      <div class="col-md-6"><strong>Reorder Threshold:</strong> {{ item.reorder_threshold }}</div>
+      <div class="col-md-6"><strong>Price:</strong> ${{ item.price }}</div>
+      <div class="col-md-6"><strong>Location:</strong> {{ item.get_location_display }}</div>
       <div class="col-12">
         <strong>Description:</strong>
-        <p>{{ object.description|default:"—" }}</p>
+        <p>{{ item.description|default:"—" }}</p>
       </div>
       <div class="col-12">
         <strong>Supplier Info:</strong>
-        <p>{{ object.supplier_info|default:"—" }}</p>
+        <p>{{ item.supplier_info|default:"—" }}</p>
       </div>
-      <div class="col-md-6">
-        <strong>Barcode:</strong> {{ object.barcode|default:"—" }}
-      </div>
-      <div class="col-md-6">
-        <strong>Date Added:</strong> {{ object.date_added|date:"M j, Y H:i" }}
-      </div>
-      <div class="col-md-6">
-        <strong>Last Modified:</strong> {{ object.date_modified|date:"M j, Y H:i" }}
-      </div>
+      <div class="col-md-6"><strong>Barcode:</strong> {{ item.barcode|default:"—" }}</div>
+      <div class="col-md-6"><strong>Date Added:</strong> {{ item.date_added|date:"M j, Y H:i" }}</div>
+      <div class="col-md-6"><strong>Last Modified:</strong> {{ item.date_modified|date:"M j, Y H:i" }}</div>
     </div>
-
-    <!-- Optional: Transaction Log Summary -->
-    {% if object.transactions.exists %}
-    <hr>
-    <h5>Recent Transactions</h5>
-    <ul class="list-group">
-      {% for log in object.transactions.all|slice:":5" %}
-      <li class="list-group-item">
-        {{ log.get_action_type_display }} by {{ log.user.username|default:"Unknown" }} on {{ log.timestamp|date:"M j, Y H:i" }}
-      </li>
-      {% endfor %}
-      {% if object.transactions.count > 5 %}
-      <li class="list-group-item text-center">
-        <em>...and {{ object.transactions.count|add:"-5" }} more</em>
-      </li>
-      {% endif %}
-    </ul>
+  
+    {% if not item.asset_managed %}
+      <hr class="my-4">
+      <a href="{% url 'stock-adjust' item.pk %}" class="btn btn-secondary">
+        <i class="bi bi-pencil-square"></i> Adjust Stock
+      </a>
     {% endif %}
+  
+    {% if item.asset_managed %}
+      <hr class="my-4">
+      {% with last=item.last_asset_transaction %}
+        {% if last and last.action_type == 'checkout' %}
+          <a href="{% url 'asset-action' item.pk %}?action=checkin"
+             class="btn btn-success me-2">
+            <i class="bi bi-box-arrow-in-left"></i> Check In
+          </a>
+        {% else %}
+          <a href="{% url 'asset-action' item.pk %}?action=checkout"
+             class="btn btn-primary me-2">
+            <i class="bi bi-box-arrow-up-right"></i> Check Out
+          </a>
+        {% endif %}
+      {% endwith %}
+        
+      <a href="{% url 'asset-list' item.pk %}" class="btn btn-outline-info me-2">
+        <i class="bi bi-list-ul"></i> View Serials
+      </a>
+        
+      <a href="{% url 'asset-add' item.pk %}" class="btn btn-outline-primary">
+        <i class="bi bi-plus-square"></i> Add Serial
+      </a>
+    {% endif %}
+  
+    {% if item.transactions.count %}
+      <hr class="my-4">
+      <h5>Recent Transactions</h5>
+      <ul class="list-group">
+        {% for log in item.transactions.all|slice:":5" %}
+          <li class="list-group-item">
+            {{ log.get_action_type_display }} by
+            {{ log.user.username|default:"Unknown" }}
+            on {{ log.timestamp|date:"M j, Y H:i" }}
+          </li>
+        {% endfor %}
+        {% if item.transactions.count > 5 %}
+          <li class="list-group-item text-center">
+            <em>…and {{ item.transactions.count|add:"-5" }} more</em>
+          </li>
+        {% endif %}
+      </ul>
+    {% endif %}
+
   </div>
 </div>
 {% endblock %}

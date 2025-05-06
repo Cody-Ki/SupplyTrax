@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card mt-4">
+  <div class="card-header">
+    {% if action == 'checkout' %}
+      <h3>Check Out Asset: {{ item.name }}</h3>
+    {% else %}
+      <h3>Check In Asset: {{ item.name }}</h3>
+    {% endif %}
+  </div>
+  <div class="card-body">
+    <form method="post" action="?action={{ action }}">
+      {% csrf_token %}
+      {{ form.non_field_errors }}
+
+      <div class="mb-3">
+        {{ form.asset.label_tag }}
+        {{ form.asset }}
+        {{ form.asset.errors }}
+      </div>
+
+      <div class="mb-3">
+        {{ form.user.label_tag }}
+        {{ form.user }}
+        {{ form.user.errors }}
+      </div>
+
+      <div class="mb-3">
+        {{ form.department.label_tag }}
+        {{ form.department }}
+        {{ form.department.errors }}
+      </div>
+
+      <div class="mb-3">
+        {{ form.notes.label_tag }}
+        {{ form.notes }}
+        <div class="form-text">{{ form.notes.help_text }}</div>
+        {{ form.notes.errors }}
+      </div>
+
+      <button type="submit" class="btn btn-{% if action == 'checkout' %}primary{% else %}success{% endif %}">
+        {% if action == 'checkout' %}
+          <i class="bi bi-box-arrow-up-right"></i> Check Out
+        {% else %}
+          <i class="bi bi-box-arrow-in-left"></i> Check In
+        {% endif %}
+      </button>
+      <a href="{% url 'inventory-detail' item.pk %}" class="btn btn-secondary">Cancel</a>
+    </form>
+  </div>
+</div>
+{% endblock %}

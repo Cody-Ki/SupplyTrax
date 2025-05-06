@@ -1,36 +1,176 @@
-from django.shortcuts import get_object_or_404, render, redirect
-from django.views.generic import ListView, CreateView, UpdateView, DeleteView, DetailView, TemplateView, View
-from django.urls import reverse_lazy
+
+from django import forms
+from django.contrib import messages
+from django.contrib.auth import get_user_model
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.db.models import Count, Q, F
-from .models import InventoryItem, AssetAssignment
-from .forms import AssetAssignmentForm
+from django.db.models import Count, F, Q
+from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse_lazy
+from django.views.generic import (
+    CreateView, DeleteView, DetailView,
+    ListView, TemplateView, UpdateView, View
+)
 
+from .models import Asset, Department, InventoryItem, TransactionLog
 
-class AssetAssignView(LoginRequiredMixin, View):
-    """
-    GET: show check-out/check-in form for asset managed items.
-    POST: record the assignment for this asset.
-    """
+class StockAdjustmentForm(forms.Form):
+    delta = forms.IntegerField(
+        label="Quantity change",
+        help_text="Enter positive to add stock, negative to remove."
+    )
+    notes = forms.CharField(
+        widget=forms.Textarea,
+        required=False,
+        help_text="Optional note for this adjustment."
+    )
+
+class AssetActionForm(forms.Form):
+    asset = forms.ModelChoiceField(
+        queryset=Asset.objects.none(),
+        label="Asset Serial",
+    )
+    user = forms.ModelChoiceField(
+        queryset=get_user_model().objects.all(),
+        required=False,
+        label="Assign to user",
+    )
+    department = forms.ModelChoiceField(
+        queryset = Department.objects.all(),
+        required = False,
+        label="Or assign to department",
+    )
+    notes = forms.CharField(
+        widget=forms.Textarea,
+        required=False,
+        help_text="Optional note."
+    )
+
+class StockAdjustView(LoginRequiredMixin, View):
     def get(self, request, pk):
-        item = get_object_or_404(InventoryItem, pk=pk, asset_managed=True)
-        initial = {'action': request.GET.get('actions', 'checkout')}
-        form = AssetAssignmentForm(initial=initial)
-        return render(request, 'inventory/asset_assign_form.html', {
+        item = get_object_or_404(InventoryItem, pk=pk, asset_managed=False)
+        form = StockAdjustmentForm()
+        return render(request, 'inventory/stock_adjust_form.html', {
             'item': item, 'form': form
         })
 
     def post(self, request, pk):
-        item = get_object_or_404(InventoryItem, pk=pk, asset_managed=True)
-        form = AssetAssignmentForm(request.POST)
-        if form.is_valid():
-            assign = form.save(commit=False)
-            assign.item = item
-            assign.save()
+        item = get_object_or_404(InventoryItem, pk=pk, asset_managed=False)
+        form = StockAdjustmentForm(request.POST)
+        if not form.is_valid():
+            return render(request, 'inventory/stock_adjust_form.html', {
+                'item': item, 'form': form
+            })
+
+        delta = form.cleaned_data['delta']
+        notes = form.cleaned_data['notes']
+
+        if item.quantity + delta < 0:
+            messages.error(request, "Cannot reduce below zero.")
             return redirect('inventory-detail', pk=pk)
-        return render(request, 'inventory/asset_assign_form.html', {
-            'item': item, 'form': form
+
+        # apply change
+        item.quantity = F('quantity') + delta
+        item.save(update_fields=['quantity'])
+
+        # log it
+        TransactionLog.objects.create(
+            inventory_item=item,
+            user=request.user,
+            action_type='add' if delta > 0 else 'remove',
+            delta=delta,
+            notes=notes
+        )
+
+        messages.success(request, f"Inventory adjusted by {delta}.")
+        return redirect('inventory-detail', pk=pk)
+
+class AssetListView(LoginRequiredMixin, ListView):
+    model = Asset
+    template_name = 'inventory/asset_list.html'
+    context_object_name = 'assets'
+
+    def get_queryset(self):
+        self.item = get_object_or_404(
+            InventoryItem, pk=self.kwargs['pk'], asset_managed=True
+        )
+        return self.item.assets.all()
+
+    def get_context_data(self, **ctx):
+        ctx = super().get_context_data(**ctx)
+        ctx['item'] = self.item
+        return ctx
+
+class AssetCreateView(LoginRequiredMixin, CreateView):
+    model = Asset
+    fields = ['serial_number']
+    template_name = 'inventory/asset_form.html'
+
+    def dispatch(self, request, *args, **kwargs):
+        self.item = get_object_or_404(
+            InventoryItem, pk=kwargs['pk'], asset_managed=True
+        )
+        return super().dispatch(request, *args, **kwargs)
+
+    def form_valid(self, form):
+        form.instance.inventory_item = self.item
+        messages.success(
+            self.request,
+            f"Added asset {form.cleaned_data['serial_number']!r}."
+        )
+        return super().form_valid(form)
+
+    def get_context_data(self, **ctx):
+        ctx = super().get_context_data(**ctx)
+        ctx['item'] = self.item
+        return ctx
+
+    def get_success_url(self):
+        return reverse_lazy('asset-list', args=[self.item.pk])
+
+class AssetActionView(LoginRequiredMixin, View):
+    def get(self, request, pk):
+        item = get_object_or_404(InventoryItem, pk=pk, asset_managed=True)
+        action = request.GET.get('action', 'checkout')
+        qs = item.assets.filter(is_checked_out=(action != 'checkout'))
+        form = AssetActionForm(initial={'asset': None})
+        form.fields['asset'].queryset = qs
+        return render(request, 'inventory/asset_action_form.html', {
+            'item': item, 'form': form, 'action': action
         })
+
+    def post(self, request, pk):
+        item = get_object_or_404(InventoryItem, pk=pk, asset_managed=True)
+        action = request.GET.get('action', 'checkout')
+        form = AssetActionForm(request.POST)
+        form.fields['asset'].queryset = item.assets.filter(
+            is_checked_out=(action != 'checkout')
+        )
+
+        if not form.is_valid():
+            return render(request, 'inventory/asset_action_form.html', {
+                'item': item, 'form': form, 'action': action
+            })
+
+        asset = form.cleaned_data['asset']
+        user  = form.cleaned_data['user']
+        department = form.cleaned_data['department']
+        notes = form.cleaned_data['notes']
+
+        asset.is_checked_out = (action == 'checkout')
+        asset.save(update_fields=['is_checked_out'])
+
+        TransactionLog.objects.create(
+            inventory_item=item,
+            asset=asset,
+            user=user,
+            department=department,
+            action_type=action,
+            notes=notes
+        )
+
+        messages.success(request, f"Asset {action} recorded.")
+        return redirect('inventory-detail', pk=pk)
+
 class InventoryListView(LoginRequiredMixin, ListView):
     model = InventoryItem
     template_name = 'inventory/inventory_list.html'
@@ -45,10 +185,8 @@ class InventoryListView(LoginRequiredMixin, ListView):
         sort = self.request.GET.get('sort', '')
 
         if search:
-            qs = qs.filter(
-                Q(name__icontains=search) |
-                Q(description__icontains=search)
-            )
+            qs = qs.filter(Q(name__icontains=search) |
+                           Q(description__icontains=search))
         if category:
             qs = qs.filter(category=category)
         if location:
@@ -65,24 +203,26 @@ class InventoryListView(LoginRequiredMixin, ListView):
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        ctx['search'] = self.request.GET.get('search', '').strip()
-        ctx['selected_category'] = self.request.GET.get('category', '')
-        ctx['selected_location'] = self.request.GET.get('location', '')
-        ctx['selected_sort'] = self.request.GET.get('sort', '')
-        ctx['categories'] = InventoryItem.CATEGORY_CHOICES
-        ctx['locations'] = InventoryItem.LOCATION_CHOICES
-        params = self.request.GET.copy()
-        params.pop('page', None)
-        ctx['params'] = params.urlencode()
+        ctx.update({
+            'search': self.request.GET.get('search', '').strip(),
+            'selected_category': self.request.GET.get('category', ''),
+            'selected_location': self.request.GET.get('location', ''),
+            'selected_sort': self.request.GET.get('sort', ''),
+            'categories': InventoryItem.CATEGORY_CHOICES,
+            'locations': InventoryItem.LOCATION_CHOICES,
+            'params': self.request.GET.copy().urlencode().replace('page=', '')
+        })
         return ctx
 
 
 class InventoryCreateView(LoginRequiredMixin, CreateView):
     model = InventoryItem
-    fields = ['name', 'description', 'category', 'quantity', 'reorder_threshold', 'supplier_info', 'price', 'location',
-              'asset_managed','serial_number', 'barcode']
+    fields = [
+        'name','description','category','quantity','reorder_threshold',
+        'supplier_info','price','location','asset_managed','barcode'
+    ]
     template_name = 'inventory/inventory_form.html'
-    success_url = reverse_lazy('inventory-list')
+    success_url   = reverse_lazy('inventory-list')
 
     def form_valid(self, form):
         form.instance._user = self.request.user
@@ -91,8 +231,10 @@ class InventoryCreateView(LoginRequiredMixin, CreateView):
 
 class InventoryUpdateView(LoginRequiredMixin, UpdateView):
     model = InventoryItem
-    fields = ['name', 'description', 'category', 'quantity', 'reorder_threshold', 'supplier_info', 'price', 'location',
-              'asset_managed','serial_number', 'barcode']
+    fields = [
+        'name','description','category','quantity','reorder_threshold',
+        'supplier_info','price','location','asset_managed','barcode'
+    ]
     template_name = 'inventory/inventory_form.html'
     success_url = reverse_lazy('inventory-list')
 
@@ -121,32 +263,22 @@ class DashboardView(LoginRequiredMixin, TemplateView):
     template_name = 'inventory/dashboard.html'
 
     def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        # Key metrics
-        context['total_items'] = InventoryItem.objects.count()
-        context['low_stock_items'] = InventoryItem.objects.filter(
+        ctx = super().get_context_data(**kwargs)
+        ctx['total_items'] = InventoryItem.objects.count()
+        ctx['low_stock_items'] = InventoryItem.objects.filter(
             quantity__lte=F('reorder_threshold')
         ).count()
 
-        # Aggregated summaries
-        cats = (InventoryItem.objects
-                .values('category')
-                .annotate(total=Count('id'))
-                .order_by('category'))
-        locs = (InventoryItem.objects
-                .values('location')
-                .annotate(total=Count('id'))
-                .order_by('location'))
+        cats = InventoryItem.objects.values('category') \
+              .annotate(total=Count('id')).order_by('category')
+        locs = InventoryItem.objects.values('location') \
+              .annotate(total=Count('id')).order_by('location')
 
-        # Choice mapping
-        category_map = dict(InventoryItem.CATEGORY_CHOICES)
-        location_map = dict(InventoryItem.LOCATION_CHOICES)
+        cmap = dict(InventoryItem.CATEGORY_CHOICES)
+        lmap = dict(InventoryItem.LOCATION_CHOICES)
 
-        # Prepare chart data arrays with display labels
-        context['category_labels'] = [category_map.get(c['category'], c['category']) for c in cats]
-        context['category_data'] = [c['total'] for c in cats]
-        context['location_labels'] = [location_map.get(l['location'], l['location']) for l in locs]
-        context['location_data'] = [l['total'] for l in locs]
-
-        return context
-
+        ctx['category_labels'] = [cmap[c['category']] for c in cats]
+        ctx['category_data'] = [c['total'] for c in cats]
+        ctx['location_labels'] = [lmap[l['location']] for l in locs]
+        ctx['location_data'] = [l['total'] for l in locs]
+        return ctx

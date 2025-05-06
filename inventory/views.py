@@ -1,10 +1,36 @@
-from django.views.generic import ListView, CreateView, UpdateView, DeleteView, DetailView, TemplateView
+from django.shortcuts import get_object_or_404, render, redirect
+from django.views.generic import ListView, CreateView, UpdateView, DeleteView, DetailView, TemplateView, View
 from django.urls import reverse_lazy
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db.models import Count, Q, F
-from .models import InventoryItem
+from .models import InventoryItem, AssetAssignment
+from .forms import AssetAssignmentForm
 
 
+class AssetAssignView(LoginRequiredMixin, View):
+    """
+    GET: show check-out/check-in form for asset managed items.
+    POST: record the assignment for this asset.
+    """
+    def get(self, request, pk):
+        item = get_object_or_404(InventoryItem, pk=pk, asset_managed=True)
+        initial = {'action': request.GET.get('actions', 'checkout')}
+        form = AssetAssignmentForm(initial=initial)
+        return render(request, 'inventory/asset_assign_form.html', {
+            'item': item, 'form': form
+        })
+
+    def post(self, request, pk):
+        item = get_object_or_404(InventoryItem, pk=pk, asset_managed=True)
+        form = AssetAssignmentForm(request.POST)
+        if form.is_valid():
+            assign = form.save(commit=False)
+            assign.item = item
+            assign.save()
+            return redirect('inventory-detail', pk=pk)
+        return render(request, 'inventory/asset_assign_form.html', {
+            'item': item, 'form': form
+        })
 class InventoryListView(LoginRequiredMixin, ListView):
     model = InventoryItem
     template_name = 'inventory/inventory_list.html'
@@ -53,7 +79,8 @@ class InventoryListView(LoginRequiredMixin, ListView):
 
 class InventoryCreateView(LoginRequiredMixin, CreateView):
     model = InventoryItem
-    fields = ['name', 'description', 'category', 'quantity', 'reorder_threshold', 'supplier_info', 'price', 'location', 'barcode']
+    fields = ['name', 'description', 'category', 'quantity', 'reorder_threshold', 'supplier_info', 'price', 'location',
+              'asset_managed','serial_number', 'barcode']
     template_name = 'inventory/inventory_form.html'
     success_url = reverse_lazy('inventory-list')
 
@@ -64,7 +91,8 @@ class InventoryCreateView(LoginRequiredMixin, CreateView):
 
 class InventoryUpdateView(LoginRequiredMixin, UpdateView):
     model = InventoryItem
-    fields = ['name', 'description', 'category', 'quantity', 'reorder_threshold', 'supplier_info', 'price', 'location', 'barcode']
+    fields = ['name', 'description', 'category', 'quantity', 'reorder_threshold', 'supplier_info', 'price', 'location',
+              'asset_managed','serial_number', 'barcode']
     template_name = 'inventory/inventory_form.html'
     success_url = reverse_lazy('inventory-list')
 

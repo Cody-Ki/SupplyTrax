@@ -1,4 +1,5 @@
 from django.db import models
+from django.conf import settings
 from django.contrib.auth.models import User
 
 class InventoryItem(models.Model):
@@ -47,6 +48,43 @@ class Department(models.Model):
 
     def __str__(self):
         return {self.name}
+
+class AssetAssignment(models.Model):
+    ACTIONS = {
+        ('checkout', 'Checked Out'),
+        ('checkin', 'Checked In'),
+    }
+
+    item = models.ForeignKey(
+        InventoryItem,
+        on_delete=models.CASCADE,
+        related_name='assignments'
+    )
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True
+    )
+
+    department = models.ForeignKey(
+        Department,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True
+    )
+
+    action = models.CharField(max_length=10, choices=ACTIONS)
+    timestamp = models.DateTimeField(auto_now_add=True)
+    notes = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ['timestamp']
+
+    def __str__(self):
+        target = self.user or self.department or '-'
+        return f"{self.get_action_display()} {self.item.name} to {target} on {self.timestamp:%Y/%m/%d %H:%M}"
 
 class TransactionLog(models.Model):
     ACTION_CHOICES = [
